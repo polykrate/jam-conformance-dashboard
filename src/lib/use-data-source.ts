@@ -38,16 +38,23 @@ function rebaseAggregated(data: Record<string, any>, baselineName: string): Reco
     const vData = { ...data[version] };
     const teams: any[] = vData.teams ?? [];
     const baselineTeam = teams.find((t: any) => t.name === baselineName);
-    if (!baselineTeam || !baselineTeam.score) {
+    if (!baselineTeam) {
       result[version] = vData;
       continue;
     }
+    const baselineRel = baselineTeam.relativeToBaseline ?? (baselineTeam.score ? baselineTeam.score : null);
     const baselineScore = baselineTeam.score;
+    if (!baselineRel && !baselineScore) {
+      result[version] = vData;
+      continue;
+    }
     vData.baseline = baselineName;
-    vData.teams = teams.map((t: any) => ({
-      ...t,
-      relativeToBaseline: t.score / baselineScore,
-    }));
+    vData.teams = teams.map((t: any) => {
+      if (t.name === baselineName) return { ...t, relativeToBaseline: 1.0 };
+      if (baselineScore && t.score) return { ...t, relativeToBaseline: t.score / baselineScore };
+      if (baselineRel && t.relativeToBaseline != null) return { ...t, relativeToBaseline: t.relativeToBaseline / baselineRel };
+      return t;
+    });
     result[version] = vData;
   }
   return result;
@@ -61,17 +68,25 @@ function rebaseBenchmarks(data: Record<string, any>, baselineName: string): Reco
       const tData = { ...data[version][trace] };
       const teams: any[] = tData.teams ?? [];
       const baselineTeam = teams.find((t: any) => t.name === baselineName);
-      if (!baselineTeam || !baselineTeam.score) {
+      if (!baselineTeam) {
         tData.baseline = baselineName;
         result[version][trace] = tData;
         continue;
       }
+      const baselineRel = baselineTeam.relativeToBaseline;
       const baselineScore = baselineTeam.score;
+      if (!baselineRel && !baselineScore) {
+        tData.baseline = baselineName;
+        result[version][trace] = tData;
+        continue;
+      }
       tData.baseline = baselineName;
-      tData.teams = teams.map((t: any) => ({
-        ...t,
-        relativeToBaseline: t.score && baselineScore ? t.score / baselineScore : t.relativeToBaseline,
-      }));
+      tData.teams = teams.map((t: any) => {
+        if (t.name === baselineName) return { ...t, relativeToBaseline: 1.0 };
+        if (baselineScore && t.score) return { ...t, relativeToBaseline: t.score / baselineScore };
+        if (baselineRel && t.relativeToBaseline != null) return { ...t, relativeToBaseline: t.relativeToBaseline / baselineRel };
+        return t;
+      });
       result[version][trace] = tData;
     }
   }
