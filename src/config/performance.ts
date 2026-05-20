@@ -67,6 +67,11 @@ export const PERFORMANCE_CONFIG = {
     }
   },
   
+  speed: {
+    full: 1.0,
+    half: 2.0,
+  },
+  
   visualization: {
     logScaleThreshold: 50,
     trendThreshold: 0.1, // 10% change threshold for trend arrows

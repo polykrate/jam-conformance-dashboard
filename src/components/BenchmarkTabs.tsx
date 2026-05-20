@@ -2,11 +2,12 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Activity, Box, Database, Layers, Grid3x3 } from 'lucide-react';
+import { Activity, Box, Database, Layers, Grid3x3, Radar, TrendingUp } from 'lucide-react';
 
 interface BenchmarkTabsProps {
   currentBenchmark: string;
   onBenchmarkChange: (benchmark: string) => void;
+  hasHistory?: boolean;
 }
 
 const benchmarks = [
@@ -16,12 +17,15 @@ const benchmarks = [
   { id: 'fallback', name: 'Fallback', icon: Layers, description: 'Fallback mechanism' },
   { id: 'storage', name: 'Storage', icon: Database, description: 'Storage operations' },
   { id: 'storage_light', name: 'Storage Light', icon: Database, description: 'Light storage mode' },
+  { id: 'radar', name: 'Radar', icon: Radar, description: 'Trace × metric breakdown' },
+  { id: 'trend', name: 'Trend', icon: TrendingUp, description: 'Performance over time', requiresHistory: true },
 ];
 
-export function BenchmarkTabs({ currentBenchmark, onBenchmarkChange }: BenchmarkTabsProps) {
+export function BenchmarkTabs({ currentBenchmark, onBenchmarkChange, hasHistory }: BenchmarkTabsProps) {
+  const visibleBenchmarks = benchmarks.filter(b => !(b as any).requiresHistory || hasHistory);
   return (
     <div className="flex flex-wrap gap-2 p-1 bg-black/30 rounded-xl border border-white/5">
-      {benchmarks.map((benchmark) => {
+      {visibleBenchmarks.map((benchmark) => {
         const Icon = benchmark.icon;
         const isActive = currentBenchmark === benchmark.id;
         
