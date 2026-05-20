@@ -107,6 +107,10 @@ const TEAM_NAME_ALIASES: Record<string, string[]> = {
   'new-jamneration': ['new_jamneration', 'new-jamneration'],
   'pyjamaz':         ['PyJAMaz', 'pyjamaz'],
   'fastroll':        ['FastRoll', 'fastroll'],
+  'gossamer':        ['gossamer-jam', 'gossamer'],
+  'polkajam':        ['polkajam'],
+  'strawberry':      ['strawberry'],
+  'turbojam':        ['turbojam'],
 };
 
 function normalizeTeamName(name: string): string {
@@ -427,35 +431,25 @@ export function STFRadarChart({
     return lookup;
   }, [compareMode, compareBenchmarkData]);
 
-  const compareAxisMin = useMemo(() => {
-    if (!compareLookup) return null;
-    const mins: Record<string, number> = {};
-    const compareTeamNames = Object.keys(compareLookup);
-    for (const axis of AXES) {
-      let min = Infinity;
-      for (const name of compareTeamNames) {
-        const val = compareLookup[name]?.[axis.trace]?.[axis.metric];
-        if (val != null && val > 0 && val < min) min = val;
-      }
-      mins[axis.id] = min === Infinity ? 1 : min;
-    }
-    return mins;
-  }, [compareLookup]);
-
-  if (compareMode && compareLookup && compareAxisMin) {
+  if (compareMode && compareLookup) {
     for (const name of activeList) {
       const matchedName = findCompareTeam(name, compareLookup);
       if (!matchedName) continue;
       const hasAllTraces = TRACES.every(t => compareLookup[matchedName]?.[t]);
       if (!hasAllTraces) continue;
       const color = TEAM_COLORS[rankedTeams.indexOf(name) % TEAM_COLORS.length];
+      const currentMetrics = teamLookup[name];
       teamPolygons.push({
         name: `${name} (${compareSourceLabel || 'compare'})`,
         color,
         values: AXES.map(axis => {
-          const val = compareLookup[matchedName]?.[axis.trace]?.[axis.metric];
-          if (val == null || val <= 0) return 1;
-          return val / compareAxisMin[axis.id];
+          const compareVal = compareLookup[matchedName]?.[axis.trace]?.[axis.metric];
+          const currentVal = currentMetrics?.[axis.trace]?.[axis.metric];
+          if (!compareVal || compareVal <= 0 || !currentVal || currentVal <= 0) {
+            return getRelative(name, axis);
+          }
+          const ratio = compareVal / currentVal;
+          return getRelative(name, axis) * ratio;
         }),
         dashed: true,
       });

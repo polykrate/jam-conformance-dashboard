@@ -94,16 +94,16 @@ function rebaseBenchmarks(data: Record<string, any>, baselineName: string): Reco
 }
 
 export function useDataSource(): UseDataSourceReturn {
-  const [source, setSourceState] = useState<DataSource>('parity');
-  const [loading, setLoading] = useState(false);
+  const [source, setSourceState] = useState<DataSource>('fluffy');
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const fluffyCache = useRef<DataState | null>(null);
   const [compareLoading, setCompareLoading] = useState(false);
   const [compareBenchmarks, setCompareBenchmarks] = useState<Record<string, any> | null>(null);
 
   const [data, setData] = useState<DataState>({
-    aggregatedData: parityAggregated as any,
-    allBenchmarksData: parityBenchmarks as any,
+    aggregatedData: {},
+    allBenchmarksData: {},
     history: null,
   });
 
@@ -174,13 +174,18 @@ export function useDataSource(): UseDataSourceReturn {
     setCompareLoading(true);
     fetchJson(`${FLUFFY_BASE}/all-benchmarks-data.json`)
       .then(bench => {
-        setCompareBenchmarks(bench);
+        const rebased = rebaseBenchmarks(bench, FLUFFY_BASELINE);
+        setCompareBenchmarks(rebased);
         if (!fluffyCache.current) {
           Promise.all([
             fetchJson(`${FLUFFY_BASE}/aggregated-data.json`),
             fetchJson(`${FLUFFY_BASE}/history.json`),
           ]).then(([agg, hist]) => {
-            fluffyCache.current = { aggregatedData: agg, allBenchmarksData: bench, history: hist };
+            fluffyCache.current = {
+              aggregatedData: rebaseAggregated(agg, FLUFFY_BASELINE),
+              allBenchmarksData: rebased,
+              history: hist,
+            };
           }).catch(() => {});
         }
       })
