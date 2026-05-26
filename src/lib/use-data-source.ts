@@ -1,10 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import parityAggregated from '@/data/aggregated-data.json';
-import parityBenchmarks from '@/data/all-benchmarks-data.json';
-
-export type DataSource = 'parity' | 'fluffy';
+import { useState, useEffect, useRef } from 'react';
 
 const FLUFFY_BASE = 'https://fluffylabs.dev/jam-testing/data';
 
@@ -15,13 +11,8 @@ interface DataState {
 }
 
 interface UseDataSourceReturn extends DataState {
-  source: DataSource;
-  setSource: (s: DataSource) => void;
   loading: boolean;
   error: string | null;
-  compareBenchmarks: Record<string, any> | null;
-  compareLoading: boolean;
-  loadCompare: () => void;
 }
 
 const FLUFFY_BASELINE = 'spacejam';
@@ -94,12 +85,9 @@ function rebaseBenchmarks(data: Record<string, any>, baselineName: string): Reco
 }
 
 export function useDataSource(): UseDataSourceReturn {
-  const [source, setSourceState] = useState<DataSource>('fluffy');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const fluffyCache = useRef<DataState | null>(null);
-  const [compareLoading, setCompareLoading] = useState(false);
-  const [compareBenchmarks, setCompareBenchmarks] = useState<Record<string, any> | null>(null);
+  const cache = useRef<DataState | null>(null);
 
   const [data, setData] = useState<DataState>({
     aggregatedData: {},
@@ -107,28 +95,10 @@ export function useDataSource(): UseDataSourceReturn {
     history: null,
   });
 
-  const setSource = useCallback((s: DataSource) => {
-    if (s === source) return;
-    setSourceState(s);
-  }, [source]);
-
   useEffect(() => {
-    if (source === 'parity') {
-      setData({
-        aggregatedData: parityAggregated as any,
-        allBenchmarksData: parityBenchmarks as any,
-        history: null,
-      });
-      setError(null);
-      setCompareBenchmarks(fluffyCache.current?.allBenchmarksData ?? null);
-      return;
-    }
-
-    setCompareBenchmarks(parityBenchmarks as any);
-
-    if (fluffyCache.current) {
-      setData(fluffyCache.current);
-      setError(null);
+    if (cache.current) {
+      setData(cache.current);
+      setLoading(false);
       return;
     }
 
@@ -148,7 +118,7 @@ export function useDataSource(): UseDataSourceReturn {
           allBenchmarksData: rebaseBenchmarks(bench, FLUFFY_BASELINE),
           history: hist,
         };
-        fluffyCache.current = state;
+        cache.current = state;
         setData(state);
       })
       .catch(err => {
@@ -160,38 +130,7 @@ export function useDataSource(): UseDataSourceReturn {
       });
 
     return () => { cancelled = true; };
-  }, [source]);
+  }, []);
 
-  const loadCompare = useCallback(() => {
-    if (source === 'fluffy') {
-      setCompareBenchmarks(parityBenchmarks as any);
-      return;
-    }
-    if (fluffyCache.current) {
-      setCompareBenchmarks(fluffyCache.current.allBenchmarksData);
-      return;
-    }
-    setCompareLoading(true);
-    fetchJson(`${FLUFFY_BASE}/all-benchmarks-data.json`)
-      .then(bench => {
-        const rebased = rebaseBenchmarks(bench, FLUFFY_BASELINE);
-        setCompareBenchmarks(rebased);
-        if (!fluffyCache.current) {
-          Promise.all([
-            fetchJson(`${FLUFFY_BASE}/aggregated-data.json`),
-            fetchJson(`${FLUFFY_BASE}/history.json`),
-          ]).then(([agg, hist]) => {
-            fluffyCache.current = {
-              aggregatedData: rebaseAggregated(agg, FLUFFY_BASELINE),
-              allBenchmarksData: rebased,
-              history: hist,
-            };
-          }).catch(() => {});
-        }
-      })
-      .catch(() => {})
-      .finally(() => setCompareLoading(false));
-  }, [source]);
-
-  return { source, setSource, loading, error, compareBenchmarks, compareLoading, loadCompare, ...data };
+  return { loading, error, ...data };
 }

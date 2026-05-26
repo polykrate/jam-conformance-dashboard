@@ -62,11 +62,6 @@ interface BenchmarkData {
 interface STFRadarChartProps {
   benchmarkData: BenchmarkData;
   version: string;
-  compareBenchmarkData?: BenchmarkData | null;
-  compareSourceLabel?: string;
-  currentSourceLabel?: string;
-  onRequestCompare?: () => void;
-  compareLoading?: boolean;
 }
 
 const TEAM_COLORS = [
@@ -97,42 +92,6 @@ const ZONE_RGBS = [
   { threshold: 100.0,r: 239, g: 68,  b: 68  },
 ];
 
-const TEAM_NAME_ALIASES: Record<string, string[]> = {
-  'typeberry':       ['@typeberry/jam', 'typeberry'],
-  'jamduna':         ['duna', 'jamduna'],
-  'jam4s':           ['jam-scala', 'jam4s'],
-  'graymatter':      ['GrayMatter', 'graymatter'],
-  'jamixir':         ['Jamixir', 'jamixir'],
-  'javajam':         ['JavaJAM', 'javajam'],
-  'new-jamneration': ['new_jamneration', 'new-jamneration'],
-  'pyjamaz':         ['PyJAMaz', 'pyjamaz'],
-  'fastroll':        ['FastRoll', 'fastroll'],
-  'gossamer':        ['gossamer-jam', 'gossamer'],
-  'polkajam':        ['polkajam'],
-  'strawberry':      ['strawberry'],
-  'turbojam':        ['turbojam'],
-};
-
-function normalizeTeamName(name: string): string {
-  const lower = name.toLowerCase().replace(/_/g, '-').replace(/@/g, '').replace(/\//g, '');
-  for (const [canonical, aliases] of Object.entries(TEAM_NAME_ALIASES)) {
-    if (aliases.some(a => a === name || a.toLowerCase() === lower)) return canonical;
-  }
-  return lower;
-}
-
-function findCompareTeam(
-  name: string,
-  compareLookup: Record<string, Record<string, Record<string, number>>>
-): string | null {
-  if (compareLookup[name]) return name;
-  const norm = normalizeTeamName(name);
-  for (const cName of Object.keys(compareLookup)) {
-    if (normalizeTeamName(cName) === norm) return cName;
-  }
-  return null;
-}
-
 function logScale(value: number, max: number): number {
   if (max <= 0) return 0;
   const clamped = Math.max(1, Math.min(value, max));
@@ -160,7 +119,7 @@ function SVGRadarChart({
   useLinearScale = false,
 }: {
   axes: Axis[];
-  teamPolygons: { name: string; color: string; values: number[]; dashed?: boolean }[];
+  teamPolygons: { name: string; color: string; values: number[] }[];
   maxRelative: number;
   size?: number;
   useLinearScale?: boolean;
@@ -311,15 +270,14 @@ function SVGRadarChart({
           <g key={team.name}>
             <path
               d={d}
-              fill={team.dashed ? 'none' : team.color}
-              fillOpacity={team.dashed ? 0 : 0.08}
+              fill={team.color}
+              fillOpacity={0.08}
               stroke={team.color}
-              strokeWidth={team.dashed ? 1.2 : 1.5}
-              strokeOpacity={team.dashed ? 0.6 : 0.8}
-              strokeDasharray={team.dashed ? '4,3' : undefined}
+              strokeWidth={1.5}
+              strokeOpacity={0.8}
             />
             {pts.map((p, i) => (
-              <circle key={i} cx={p[0]} cy={p[1]} r={team.dashed ? 2 : 2.5} fill={team.color} fillOpacity={team.dashed ? 0.5 : 0.9} />
+              <circle key={i} cx={p[0]} cy={p[1]} r={2.5} fill={team.color} fillOpacity={0.9} />
             ))}
           </g>
         );
@@ -331,15 +289,9 @@ function SVGRadarChart({
 export function STFRadarChart({
   benchmarkData,
   version,
-  compareBenchmarkData,
-  compareSourceLabel,
-  currentSourceLabel,
-  onRequestCompare,
-  compareLoading,
 }: STFRadarChartProps) {
   const [activeTeams, setActiveTeams] = useState<Set<string>>(new Set());
   const [showInfo, setShowInfo] = useState(false);
-  const [compareMode, setCompareMode] = useState(false);
 
   if (!benchmarkData) {
     return <div className="text-center text-slate-400 py-12">No benchmark data for version {version}</div>;
@@ -360,7 +312,6 @@ export function STFRadarChart({
     return lookup;
   }, [benchmarkData, completeTeams.join(',')]);
 
-  // Average relativeToBaseline across 4 traces (uses the baseline from the data, not per-axis fastest)
   const teamBaselineRelative = useMemo(() => {
     const rel: Record<string, number> = {};
     for (const name of completeTeams) {
@@ -411,50 +362,11 @@ export function STFRadarChart({
   };
 
   const activeList = rankedTeams.filter(t => activeTeams.has(t));
-  const teamPolygons: { name: string; color: string; values: number[]; dashed?: boolean }[] = activeList.map(name => ({
+  const teamPolygons: { name: string; color: string; values: number[] }[] = activeList.map(name => ({
     name,
     color: TEAM_COLORS[rankedTeams.indexOf(name) % TEAM_COLORS.length],
     values: AXES.map(axis => getRelative(name, axis)),
   }));
-
-  const compareLookup = useMemo(() => {
-    if (!compareMode || !compareBenchmarkData) return null;
-    const vData = compareBenchmarkData;
-    if (!vData) return null;
-    const lookup: Record<string, Record<string, Record<string, number>>> = {};
-    for (const trace of TRACES) {
-      for (const team of (vData[trace]?.teams ?? []) as BenchmarkTeam[]) {
-        if (!lookup[team.name]) lookup[team.name] = {};
-        lookup[team.name][trace] = team.metrics;
-      }
-    }
-    return lookup;
-  }, [compareMode, compareBenchmarkData]);
-
-  if (compareMode && compareLookup) {
-    for (const name of activeList) {
-      const matchedName = findCompareTeam(name, compareLookup);
-      if (!matchedName) continue;
-      const hasAllTraces = TRACES.every(t => compareLookup[matchedName]?.[t]);
-      if (!hasAllTraces) continue;
-      const color = TEAM_COLORS[rankedTeams.indexOf(name) % TEAM_COLORS.length];
-      const currentMetrics = teamLookup[name];
-      teamPolygons.push({
-        name: `${name} (${compareSourceLabel || 'compare'})`,
-        color,
-        values: AXES.map(axis => {
-          const compareVal = compareLookup[matchedName]?.[axis.trace]?.[axis.metric];
-          const currentVal = currentMetrics?.[axis.trace]?.[axis.metric];
-          if (!compareVal || compareVal <= 0 || !currentVal || currentVal <= 0) {
-            return getRelative(name, axis);
-          }
-          const ratio = compareVal / currentVal;
-          return getRelative(name, axis) * ratio;
-        }),
-        dashed: true,
-      });
-    }
-  }
 
   let maxRelative = 1;
   for (const tp of teamPolygons) {
@@ -481,36 +393,13 @@ export function STFRadarChart({
               4 traces &times; 4 weighted metrics &mdash; {rankedTeams.length} implementations with full coverage
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            {onRequestCompare && (
-              <button
-                onClick={() => {
-                  if (!compareBenchmarkData && !compareLoading) onRequestCompare();
-                  setCompareMode(prev => !prev);
-                }}
-                disabled={compareLoading}
-                className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-all border
-                  ${compareMode
-                    ? 'bg-cyan-500/15 border-cyan-400/40 text-cyan-300 hover:bg-cyan-500/20'
-                    : 'text-slate-400 hover:text-white hover:bg-white/5 border-transparent'
-                  }
-                  ${compareLoading ? 'opacity-50 cursor-wait' : ''}
-                `}
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M16 3h5v5M8 3H3v5M3 16v5h5M21 16v5h-5M21 3l-9 9M3 21l9-9" />
-                </svg>
-                <span>{compareLoading ? 'Loading...' : compareMode ? 'Comparing' : 'Compare sources'}</span>
-              </button>
-            )}
-            <button
-              onClick={() => setShowInfo(!showInfo)}
-              className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors px-3 py-1.5 rounded-lg hover:bg-white/5"
-            >
-              <Info className="w-4 h-4" />
-              <span>{showInfo ? 'Hide' : 'Show'} methodology</span>
-            </button>
-          </div>
+          <button
+            onClick={() => setShowInfo(!showInfo)}
+            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors px-3 py-1.5 rounded-lg hover:bg-white/5"
+          >
+            <Info className="w-4 h-4" />
+            <span>{showInfo ? 'Hide' : 'Show'} methodology</span>
+          </button>
         </div>
 
         {showInfo && (
@@ -546,26 +435,11 @@ export function STFRadarChart({
                   <div key={tp.name} className="flex items-center gap-1.5 text-xs">
                     <div
                       className="w-3 h-3 rounded-full"
-                      style={{
-                        backgroundColor: tp.dashed ? 'transparent' : tp.color,
-                        border: tp.dashed ? `2px dashed ${tp.color}` : 'none',
-                      }}
+                      style={{ backgroundColor: tp.color }}
                     />
                     <span className="text-slate-300">{tp.name}</span>
                   </div>
                 ))}
-              </div>
-            )}
-            {compareMode && (
-              <div className="flex justify-center gap-6 mt-2 text-[10px] text-slate-500">
-                <div className="flex items-center gap-1">
-                  <div className="w-6 h-0.5 bg-slate-400" />
-                  <span>{currentSourceLabel || 'Current'}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <div className="w-6 h-0.5 border-t-2 border-dashed border-slate-400" />
-                  <span>{compareSourceLabel || 'Compare'}</span>
-                </div>
               </div>
             )}
 

@@ -11,15 +11,13 @@ import { BenchmarkInfo } from '@/components/BenchmarkInfo';
 import { MethodologyExplainer } from '@/components/MethodologyExplainer';
 import { STFRadarChart } from '@/components/STFRadarChart';
 import { PerformanceTrend } from '@/components/PerformanceTrend';
-import { DataSourceSelector } from '@/components/DataSourceSelector';
 import { useDataSource } from '@/lib/use-data-source';
 import { Info, Loader2 } from 'lucide-react';
-import sourceInfo from '@/data/source-info.json';
 import { APP_CONFIG } from '@/config';
 import { enrichTeamWithMetadata } from '@/lib/team-utils';
 
 export default function Home() {
-  const { source, setSource, loading, error, aggregatedData, allBenchmarksData, history, compareBenchmarks, compareLoading, loadCompare } = useDataSource();
+  const { loading, error, aggregatedData, allBenchmarksData, history } = useDataSource();
 
   const versions = Object.keys(aggregatedData).sort().reverse();
   const [currentVersion, setCurrentVersion] = useState(versions[0] || APP_CONFIG.defaultVersion);
@@ -29,7 +27,7 @@ export default function Home() {
 
   useEffect(() => {
     setCurrentBenchmark('');
-  }, [currentVersion, source]);
+  }, [currentVersion]);
 
   useEffect(() => {
     const newVersions = Object.keys(aggregatedData).sort().reverse();
@@ -43,7 +41,7 @@ export default function Home() {
       <main className="min-h-screen flex items-center justify-center" style={{ backgroundImage: `url(${basePath}${APP_CONFIG.paths.backgroundImage})`, backgroundRepeat: 'repeat', backgroundSize: '1024px 1059px', backgroundColor: '#000000' }}>
         <div className="flex flex-col items-center gap-4 text-slate-400">
           <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
-          <p className="text-sm">Loading {source === 'fluffy' ? 'FluffyLabs' : 'Parity'} data...</p>
+          <p className="text-sm">Loading performance data...</p>
         </div>
       </main>
     );
@@ -76,8 +74,7 @@ export default function Home() {
                 Conformance Performance
               </p>
             </div>
-            <div className="flex items-center gap-3 flex-shrink-0">
-              <DataSourceSelector source={source} onSourceChange={setSource} loading={loading} />
+            <div className="flex-shrink-0">
               <VersionSelector
                 versions={versions}
                 currentVersion={currentVersion}
@@ -108,11 +105,6 @@ export default function Home() {
               <STFRadarChart
                 benchmarkData={(allBenchmarksData as any)[currentVersion]}
                 version={currentVersion}
-                compareBenchmarkData={compareBenchmarks?.[currentVersion] ?? null}
-                compareSourceLabel={source === 'parity' ? 'FluffyLabs' : 'Parity'}
-                currentSourceLabel={source === 'parity' ? 'Parity' : 'FluffyLabs'}
-                onRequestCompare={loadCompare}
-                compareLoading={compareLoading}
               />
             </div>
           ) : currentBenchmark === 'trend' && hasHistory ? (
@@ -193,19 +185,12 @@ export default function Home() {
           <div className="mt-16 text-center text-sm text-slate-500">
             <p>
               Performance data updated regularly. Version: {currentVersion}
-              {' '}| Source: {source === 'parity' ? 'Parity' : 'FluffyLabs'}
+              {' '}| Source: FluffyLabs
               {overviewData.timestamp && (
                 <span className="ml-2">
                   | Last updated: {new Date(overviewData.timestamp).toLocaleString('en-US', {
                     dateStyle: 'medium',
                     timeStyle: 'short'
-                  })}
-                </span>
-              )}
-              {source === 'parity' && sourceInfo.source?.commitDate && sourceInfo.source.commitHash !== 'placeholder' && (
-                <span className="ml-2">
-                  | Source data from: {new Date(sourceInfo.source.commitDate).toLocaleString('en-US', {
-                    dateStyle: 'medium'
                   })}
                 </span>
               )}
@@ -220,33 +205,15 @@ export default function Home() {
               >
                 jam-conformance
               </a>
-              {source === 'parity' && (
-                <>
-                  {' '}|{' '}
-                  <a
-                    href={sourceInfo.source?.sourceUrl || `${APP_CONFIG.externalLinks.jamConformance}/commits/main`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-cyan-400 hover:text-cyan-300 transition-colors"
-                    title={sourceInfo.source?.commitMessage || 'View latest commits'}
-                  >
-                    {sourceInfo.source?.commitHash ? `Commit ${sourceInfo.source.commitHash.slice(0, 7)}` : 'Latest commits'}
-                  </a>
-                </>
-              )}
-              {source === 'fluffy' && (
-                <>
-                  {' '}|{' '}
-                  <a
-                    href="https://fluffylabs.dev/jam-testing/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-cyan-400 hover:text-cyan-300 transition-colors"
-                  >
-                    FluffyLabs Testing
-                  </a>
-                </>
-              )}
+              {' '}|{' '}
+              <a
+                href="https://fluffylabs.dev/jam-testing/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-cyan-400 hover:text-cyan-300 transition-colors"
+              >
+                FluffyLabs Testing
+              </a>
               {' '}|{' '}
               <a
                 href={APP_CONFIG.externalLinks.graypaperClients}
